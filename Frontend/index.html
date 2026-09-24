@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trip Planner AI</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app">
+
+        <header class="header">
+            <div class="logo">✈️ Trip Planner AI</div>
+            <div class="status">● Online</div>
+        </header>
+ 
+        <main id="chat-window" class="chat-window">
+            <div id="welcome" class="welcome">
+                <div class="welcome-icon">✈️</div>
+                <h1>
+                    Where do you want to go?
+                </h1>
+                <p>
+                    Tell me your destination, budget,
+                    number of travelers and trip duration.
+                </p>
+            </div>
+        </main>
+
+        <div class="input-area">
+            <div class="input-box">
+                <input id="query" type="text" placeholder="Plan your trip..." autocomplete="off">
+                <button id="sendBtn" type="button">➤</button>
+            </div>
+            <div class="input-hint">
+                Press Enter to send
+            </div>
+        </div>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+</html>

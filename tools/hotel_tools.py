@@ -2,9 +2,9 @@ import json
 import requests
 import regex as re
 from datetime import datetime, timedelta
+from typing import Optional
 from langchain_core.tools import tool
 from Config.settings import CLEANED_RAPIDAPI_KEY
-
 
 @tool
 def search_location(city_name: str) -> str:
@@ -16,111 +16,141 @@ def search_location(city_name: str) -> str:
         "x-rapidapi-host": "booking-com15.p.rapidapi.com",
         "Content-Type": "application/json",
     }
-
+ 
     try:
         response = requests.get(url, headers=headers, params=params, timeout=30)
         response.raise_for_status()
         data = response.json().get("data", [])
     except Exception as e:
         return json.dumps({"error": f"Location API error: {str(e)}"})
-
+ 
     if not data:
         return json.dumps({"error": f"No location match found for {city_name}"})
-
+ 
     best = data[0]
+     
     return json.dumps({
         "city": city_name,
         "dest_id": best.get("dest_id"),
         "dest_type": best.get("search_type") or best.get("dest_type")
     })
 
-
 @tool
-def search_hotel(dest_id: str, dest_type: str, checkin: str = None, checkout: str = None, budget: float = None) -> str:
-    """Search hotels in a given city using Booking.com API."""
+def search_hotel(
+    dest_id: str,
+    dest_type: str,
+    checkin: Optional[str] = None,
+    travelers: int = 1,
+    checkout: Optional[str] = None,
+    budget: Optional[float] = None,
+) -> str:
+    """Search hotels. budget is the maximum TOTAL room/stay price returned by the API."""
+    if not dest_id or not dest_type:
+        return json.dumps({"error": "dest_id and dest_type are required"})
     if not checkin:
         return json.dumps({"error": "Missing checkin date for hotel search"})
 
-    if checkin and not checkout:
+    try:
         checkin_dt = datetime.strptime(checkin, "%Y-%m-%d")
-        checkout = (checkin_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+        if checkout:
+            checkout_dt = datetime.strptime(checkout, "%Y-%m-%d")
+            if checkout_dt <= checkin_dt:
+                return json.dumps({"error": "checkout must be after checkin"})
+        else:
+            checkout_dt = checkin_dt + timedelta(days=1)
+            checkout = checkout_dt.strftime("%Y-%m-%d")
+    except ValueError:
+        return json.dumps({"error": "Hotel dates must use YYYY-MM-DD"})
+
+    try:
+        travelers = max(int(travelers), 1)
+    except (TypeError, ValueError):
+        travelers = 1
+
+    try:
+        budget = float(budget) if budget is not None else None
+    except (TypeError, ValueError):
+        return json.dumps({"error": "Hotel budget must be numeric"})
 
     url = "https://booking-com15.p.rapidapi.com/api/v1/hotels/searchHotels"
     params = {
-        "dest_id": dest_id,
-        "search_type": dest_type.upper(),
+        "dest_id": str(dest_id),
+        "search_type": str(dest_type).upper(),
         "arrival_date": checkin,
         "departure_date": checkout,
-        "adults": 2,
+        "adults": travelers,
         "room_qty": 1,
         "units": "metric",
         "temperature_unit": "c",
         "languagecode": "en-gb",
         "currency_code": "INR",
     }
-
     headers = {
         "x-rapidapi-key": CLEANED_RAPIDAPI_KEY,
         "x-rapidapi-host": "booking-com15.p.rapidapi.com",
-        "Content-Type": "application/json",
     }
 
     try:
-        hotel_response = requests.get(url, headers=headers, params=params, timeout=30)
-        hotel_response.raise_for_status()
-        data = hotel_response.json()
-    except Exception as e:
-        return json.dumps({"error": f"Hotel API error: {str(e)}"})
+        response = requests.get(url, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as exc:
+        return json.dumps({"error": f"Hotel API request failed: {exc}"})
+    except ValueError:
+        return json.dumps({"error": "Hotel API returned invalid JSON"})
+    except Exception as exc:
+        return json.dumps({"error": f"Unexpected hotel API error: {exc}"})
 
-    api_data_block = data.get("data", {})
-    hotels = api_data_block.get("hotels", [])
+    if not isinstance(data, dict):
+        return json.dumps({"error": "Hotel API returned an unexpected response format"})
 
-    if budget is not None:
+    api_data = data.get("data") or {}
+    hotels = api_data.get("hotels") or []
+    if not isinstance(hotels, list):
+        return json.dumps({"error": "Hotel API hotels field is not a list"})
+
+    cleaned = []
+    for hotel in hotels:
+        if not isinstance(hotel, dict):
+            continue
+        prop = hotel.get("property") or {}
+        breakdown = prop.get("priceBreakdown") or {}
+        gross = breakdown.get("grossPrice") or {}
+        actual_price = gross.get("value")
+
         try:
-            budget = float(budget)
-        except (ValueError, TypeError):
-            budget = None
+            actual_price = float(actual_price) if actual_price is not None else None
+        except (TypeError, ValueError):
+            actual_price = None
 
-    if budget is not None:
-        filtered_hotels = []
-        for h in hotels:
-            property_data = h.get("property", {})
-            price_breakdown = property_data.get("priceBreakdown", {})
-            gross_price = price_breakdown.get("grossPrice", {})
-            actual_price = gross_price.get("value")
+        if actual_price is None:
+            label = str(hotel.get("accessibilityLabel") or "")
+            match = re.search(r"(?:Current price|price)[^\d]*([\d,]+(?:\.\d+)?)", label, re.I)
+            if match:
+                try:
+                    actual_price = float(match.group(1).replace(",", ""))
+                except ValueError:
+                    pass
 
-            if actual_price is None:
-                label = h.get("accessibilityLabel", "")
-                match = re.search(r"Current price (\d+)", label)
-                if match:
-                    actual_price = float(match.group(1))
+        if budget is not None and (actual_price is None or actual_price > budget):
+            continue
 
-            if actual_price is None:
-                actual_price = float("inf")
-
-            if actual_price <= budget:
-                filtered_hotels.append(h)
-
-        hotels = filtered_hotels
-
-    cleaned_hotels = []
-    for h in hotels:
-        property_data = h.get("property", {})
-        cleaned_hotels.append({
-            "name": property_data.get("name", "Unknown Hotel"),
-            "rating": property_data.get("reviewScore", "N/A"),
-            "rating_word": property_data.get("reviewScoreWord", "N/A"),
-            "price_inr": property_data.get("priceBreakdown", {}).get("grossPrice", {}).get("value", "N/A"),
-            "hotel_class": property_data.get("propertyClass", "N/A"),
-            "checkin_from": property_data.get("checkin", {}).get("fromTime", "N/A"),
-            "checkout_until": property_data.get("checkout", {}).get("untilTime", "N/A"),
+        cleaned.append({
+            "name": prop.get("name", "Unknown Hotel"),
+            "rating": prop.get("reviewScore", 0),
+            "rating_word": prop.get("reviewScoreWord", "N/A"),
+            "price_inr": actual_price if actual_price is not None else "N/A",
+            "hotel_class": prop.get("propertyClass", "N/A"),
+            "checkin_from": (prop.get("checkin") or {}).get("fromTime", "N/A"),
+            "checkout_until": (prop.get("checkout") or {}).get("untilTime", "N/A"),
         })
 
     return json.dumps({
-        "dest_id": dest_id,
-        "dest_type": dest_type,
+        "dest_id": str(dest_id),
+        "dest_type": str(dest_type),
         "checkin": checkin,
         "checkout": checkout,
-        "budget": budget,
-        "results": cleaned_hotels[:10]
+        "budget_total_stay": budget,
+        "price_semantics": "gross room/stay price as returned by the API",
+        "results": cleaned[:10],
     }, indent=2)
