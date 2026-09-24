@@ -1,4 +1,4 @@
-# ✈️ AI Trip Planner Agent
+# ✈️ Full-Stack Agentic AI Trip Planner
 
 A **Full-Stack Agentic AI Trip Planner** that intelligently creates personalized travel plans based on destination, travel dates, budget, number of travelers, and travel preferences.
 
