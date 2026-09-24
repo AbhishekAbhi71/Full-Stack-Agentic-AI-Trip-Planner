@@ -2,7 +2,7 @@
 
 A **Full-Stack Agentic AI Trip Planner** that intelligently creates personalized travel plans based on destination, travel dates, budget, number of travelers, and travel preferences.
 
-The application combines a **HTML/CSS/JavaScript frontend**, **FastAPI backend**, **LangChain + LangGraph agent workflow**, **Google Gemini LLM**, and **real-time travel APIs** to generate complete trip plans including transportation, hotels, activities, budget allocation, and day-wise itineraries.
+The application combines a **React.js frontend**, **FastAPI backend**, **LangChain + LangGraph agent workflow**, **Google Gemini LLM**, and **real-time travel APIs** to generate complete trip plans including transportation, hotels, activities, budget allocation, and day-wise itineraries.
 
 ---
 
@@ -28,8 +28,7 @@ The application combines a **HTML/CSS/JavaScript frontend**, **FastAPI backend**
 ---
 
 # 🏗️ System Architecture
-
-```text
+ 
                          ┌─────────────────────┐
                          │       USER          │
                          │  Trip Requirements  │
@@ -38,7 +37,7 @@ The application combines a **HTML/CSS/JavaScript frontend**, **FastAPI backend**
                                     ▼
                          ┌─────────────────────┐
                          │    FRONTEND         │
-                         │ HTML + CSS + JS     │
+                         │     React.js        │
                          └──────────┬──────────┘
                                     │
                               HTTP / REST API
@@ -125,9 +124,7 @@ The agent can:
 
 ## Frontend
 
-* **HTML5**
-* **CSS3**
-* **JavaScript**
+* **React.js**
 * REST API integration
 * Interactive trip-planning interface
 
@@ -159,7 +156,7 @@ The agent can:
 
 # 📁 Project Structure
 
-```text
+```
 trip-planner-agent/
 │
 ├── frontend/
